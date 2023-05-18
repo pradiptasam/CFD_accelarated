@@ -1,0 +1,59 @@
+module jacobi
+
+  implicit none
+
+contains
+
+subroutine jacobistep(psinew, psi, m, n)
+
+  integer :: m, n
+  double precision, dimension(0:m+1, 0:n+1) :: psinew, psi
+  integer :: i, j
+
+  !$acc data copyin(psi) copyout(psinew)
+  !$acc parallel loop gang worker num_workers(32) vector_length(32) default(present)
+  do i = 1, m
+    !$acc loop vector
+    do j = 1, n
+      psinew(i, j) = 0.25d0*(psi(i+1, j) + psi(i-1, j) + &
+                             psi(i, j+1) + psi(i, j-1)     )
+    end do
+  end do 
+  !$acc end data
+
+end subroutine jacobistep
+
+subroutine jacobistepvort(zetnew, psinew, zet, psi, m, n, re)
+
+  integer :: m, n
+  double precision :: re 
+  double precision, dimension(0:m+1, 0:n+1) :: zetnew, zet, psinew, psi
+
+  psinew(1:m, 1:n) = 0.25d0*(psi(2:m+1, 1:n) + psi(0:m-1, 1:n) + &
+                             psi(1:m, 2:n+1) + psi(1:m, 0:n-1) - &
+                             zet(1:m,   1:n))
+
+  zetnew(1:m, 1:n) = 0.25d0*(zet(2:m+1, 1:n) + zet(0:m-1, 1:n) +     &
+                             zet(1:m, 2:n+1) + zet(1:m, 0:n-1)   ) - &
+                   re/16.0*((psi(1:m, 2:n+1) - psi(1:m, 0:n-1)) *    &
+                            (zet(2:m+1, 1:n) - zet(0:m-1, 1:n)) -    &
+                            (psi(2:m+1, 1:n) - psi(0:m-1, 1:n)) *    &
+                            (zet(1:m, 2:n+1) - zet(1:m, 0:n-1))  )
+
+end subroutine jacobistepvort
+
+double precision function deltasq(new, old, m, n)
+
+  integer :: m, n
+  double precision, dimension(0:m+1, 0:n+1) :: new, old
+
+  integer :: ierr
+
+  deltasq =   sum((new(1:m,1:n)-old(1:m,1:n))**2)
+
+end function deltasq
+
+end module jacobi
+                                    
+
+
